@@ -8,7 +8,7 @@
 // approve it in Safe{Wallet} first, so the toast says so instead of waiting.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { erc20Abi, type Abi, type Address, type Chain, type Hash, type TransactionReceipt } from 'viem';
+import { WaitForTransactionReceiptTimeoutError, erc20Abi, type Abi, type Address, type Chain, type Hash, type TransactionReceipt } from 'viem';
 import { useAccount, useConfig, usePublicClient } from 'wagmi';
 import { switchChain, writeContract } from 'wagmi/actions';
 import { explain, isAllowanceRefusal } from './errors';
@@ -26,7 +26,7 @@ export interface Call {
 interface Toast {
   id: number;
   label: string;
-  status: 'switch' | 'wallet' | 'submitted' | 'confirmed' | 'failed' | 'safe';
+  status: 'switch' | 'wallet' | 'submitted' | 'confirmed' | 'failed' | 'safe' | 'unconfirmed';
   /** Every transaction the job has sent, in order. */
   hashes: Hash[];
   detail?: string;
@@ -70,10 +70,41 @@ const PENDING_KEY = 'fund-pending-tx';
 const MAX_TOASTS = 6;
 /** The indexer takes a few seconds to catch up with a confirmed transaction. */
 const INDEXER_LAG_MS = 6_000;
+/**
+ * How long a sent transaction is followed before the toast says it's still
+ * unconfirmed (viem's default gives up after 3 minutes and calls it failed).
+ * It may still go through after that, so it's never reported as failed, and a
+ * reload follows it again.
+ */
+const CONFIRM_WAIT_MS = 10 * 60_000;
+/**
+ * An account that has delegated to a smart-account contract (EIP-7702, as
+ * MetaMask's smart accounts do) has this code: 0xef0100 and the contract's
+ * address. It still signs and sends like any other account, unlike a Safe.
+ */
+const DELEGATED_ACCOUNT = /^0xef0100[0-9a-f]{40}$/i;
 
 let toastSeq = 0;
 /** A toast for a job of one or more transactions: pass it to each send and to the closing note. */
 export const newToast = () => ++toastSeq;
+
+/** The wallet replaced the transaction before it was mined: cancelled it, or used its place for another. */
+class Replaced extends Error {
+  constructor(reason: 'cancelled' | 'replaced') {
+    super(
+      reason === 'cancelled'
+        ? 'You cancelled it in your wallet before it was confirmed. Nothing was changed.'
+        : 'Your wallet sent another transaction in its place, so this one never ran. Nothing was changed by it.',
+    );
+  }
+}
+
+/** Sent, but not confirmed within CONFIRM_WAIT_MS: it may still go through. */
+class Unconfirmed extends Error {
+  constructor() {
+    super('It may still go through, so check it with the link before sending it again. Reloading this page follows it again.');
+  }
+}
 
 /** A sent transaction that reverted on chain, with its block so it can be replayed to say why. */
 class Reverted extends Error {
@@ -119,10 +150,11 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   const jobs = useRef(new Map<number, string>());
   const close = useCallback((id: number) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
   /** Show a step in a job's toast: a new toast goes on top, and a hash is added to its links. */
-  const show = useCallback((id: number, label: string, status: Toast['status'], extra: { hash?: Hash; detail?: string } = {}) => {
+  const show = useCallback((id: number, label: string, status: Toast['status'], extra: { hash?: Hash; detail?: string; replaces?: Hash } = {}) => {
     setToasts((ts) => {
       const old = ts.find((t) => t.id === id);
-      const hashes = old?.hashes ?? [];
+      // A sped-up transaction is mined under a new hash: its link takes the old one's place.
+      const hashes = (old?.hashes ?? []).filter((h) => h !== extra.replaces);
       const next: Toast = { id, label, status, detail: extra.detail, hashes: extra.hash && !hashes.includes(extra.hash) ? [...hashes, extra.hash] : hashes };
       // Once an action goes through, its earlier failed tries have nothing left to say.
       const job = (t: Toast) => jobs.current.get(t.id) ?? t.label;
@@ -136,13 +168,32 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   const finish = useCallback(
     async (id: number, label: string, hash: Hash, project: Address) => {
       show(id, label, 'submitted', { hash });
+      // Its outcome is known (mined, or replaced in the wallet), so a reload has nothing left to follow.
+      let settled = true;
       try {
-        const receipt = await client!.waitForTransactionReceipt({ hash });
+        // The wallet can replace a pending transaction. The wait then returns the replacement's receipt.
+        const replaced: { by?: { reason: 'cancelled' | 'replaced' | 'repriced'; hash: Hash } } = {};
+        const receipt = await client!.waitForTransactionReceipt({
+          hash,
+          timeout: CONFIRM_WAIT_MS,
+          onReplaced: (r) => {
+            replaced.by = { reason: r.reason, hash: r.transaction.hash };
+          },
+        });
+        if (replaced.by) {
+          // Only a speed-up is still this transaction. A cancel (or anything else at its nonce) succeeded as something else.
+          if (replaced.by.reason !== 'repriced') throw new Replaced(replaced.by.reason);
+          show(id, label, 'submitted', { hash: replaced.by.hash, replaces: hash });
+        }
         if (receipt.status !== 'success') throw new Reverted(receipt.blockNumber, receipt.gasUsed);
         show(id, label, 'confirmed');
         return receipt;
+      } catch (e) {
+        if (!(e instanceof WaitForTransactionReceiptTimeoutError)) throw e;
+        settled = false;
+        throw new Unconfirmed();
       } finally {
-        writePending(null);
+        if (settled) writePending(null);
         refresh(project);
         // Again once the indexer has caught up, so lists and history show it.
         setTimeout(() => refresh(project, true), INDEXER_LAG_MS);
@@ -159,7 +210,9 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
     const p = readPending();
     if (p && p.chainId === chain.id) {
       const id = newToast();
-      finish(id, p.label, p.hash, p.project).catch((e) => show(id, p.label, 'failed', { hash: p.hash, detail: explain(e) }));
+      finish(id, p.label, p.hash, p.project).catch((e) =>
+        show(id, p.label, e instanceof Unconfirmed ? 'unconfirmed' : 'failed', { detail: explain(e), ...(e instanceof Replaced ? { replaces: p.hash } : { hash: p.hash }) }),
+      );
     }
   }, [client, chain.id, finish, show]);
 
@@ -179,7 +232,8 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         const estimate = await client!.estimateContractGas(request);
         gas = GAS_PAD(estimate) + (PAYS_DUE_CYCLES.has(call.functionName) ? GROWTH_ROOM : 0n);
         if (!contractWallets.current.has(address)) {
-          contractWallets.current.set(address, Boolean(await client!.getCode({ address })));
+          const code = await client!.getCode({ address });
+          contractWallets.current.set(address, Boolean(code) && !DELEGATED_ACCOUNT.test(code!));
         }
         const safe = contractWallets.current.get(address);
         const sent = await writeContract(config, { ...request, chainId: chain.id, gas });
@@ -205,7 +259,10 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
             detail = `Nothing was changed. ${explain(why, amount, noReason)}`;
           }
         }
-        show(id, label, 'failed', { hash, detail });
+        // Not confirmed in time isn't a failure: it may still go through, and the job stops rather than send more.
+        if (e instanceof Unconfirmed) show(id, label, 'unconfirmed', { detail: e.message });
+        // A replaced transaction's hash never reaches the chain, so its link goes.
+        else show(id, label, 'failed', { detail, ...(e instanceof Replaced ? { replaces: hash } : { hash }) });
         throw e;
       }
     },
@@ -281,6 +338,7 @@ const STATUS_TEXT: Record<Exclude<Toast['status'], 'switch'>, string> = {
   submitted: 'Sent. Waiting for the network to confirm it…',
   confirmed: 'Confirmed.',
   failed: "Didn't go through.",
+  unconfirmed: 'Not confirmed yet.',
   safe: 'Sent to your Safe. The other signers need to approve it in Safe{Wallet}. This page updates once it runs.',
 };
 

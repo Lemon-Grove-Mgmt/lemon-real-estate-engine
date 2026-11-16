@@ -8,7 +8,7 @@ import type { Disclosures } from './disclosures';
 import { CLASS_NAMES, formatAmount, formatDuration, formatTime, parseAmount, plainAmount, ratePercent, shortAddress } from './format';
 import type { ProjectData, useWallet } from './queries';
 import { Rich, RichLine } from './Rich';
-import { useSend } from './tx';
+import { newToast, useSend, useTxNote } from './tx';
 
 type WalletData = NonNullable<ReturnType<typeof useWallet>['data']>;
 
@@ -28,11 +28,12 @@ interface Props {
 
 export function InvestForm({ project, title, account, chain, token, cycleDuration, data, wallet, first, disclosures }: Props) {
   const send = useSend();
+  const note = useTxNote();
   const id = useId();
   const [text, setText] = useState('');
   const [acked, setAcked] = useState<boolean[]>([]);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ id: bigint; principal: bigint; maturity: bigint } | null>(null);
+  const [done, setDone] = useState<{ id: bigint; principal: bigint; maturity: bigint; asked: bigint } | null>(null);
 
   const { state, config } = data;
   const fmt = (v: bigint) => formatAmount(v, token.decimals);
@@ -79,7 +80,9 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
   async function invest() {
     setBusy(true);
     try {
-      const opts = { project, amount: (v: unknown) => amount(BigInt(v as bigint)) };
+      // One toast for the allowance and the investment, so it can say what was actually invested.
+      const toast = newToast();
+      const opts = { project, amount: (v: unknown) => amount(BigInt(v as bigint)), toast };
       if (needsApproval) {
         const approved = await send(`Allow ${amount(fill)}`, { address: token.address, abi: erc20Abi, functionName: 'approve', args: [project, fill] }, opts);
         // A Safe queues the approval for its signers; invest once it has run.
@@ -88,7 +91,11 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
       const receipt = await send(`Invest ${amount(fill)}`, { address: project, abi: projectAbi, functionName: 'deposit', args: [fill] }, opts);
       if (!receipt) return;
       const [ev] = parseEventLogs({ abi: projectAbi, eventName: 'DepositRecorded', logs: receipt.logs });
-      if (ev) setDone({ id: ev.args.depositId, principal: ev.args.principal, maturity: ev.args.maturity });
+      if (ev) {
+        setDone({ id: ev.args.depositId, principal: ev.args.principal, maturity: ev.args.maturity, asked: fill });
+        // Someone else invested first: the contract takes only what's left of the raise.
+        if (ev.args.principal < fill) note(`Invest ${amount(fill)}`, `Invested ${amount(ev.args.principal)}: that was all that was left in the raise.`, false, toast);
+      }
       setText('');
       setAcked([]);
     } catch {
@@ -104,6 +111,12 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
         <p className="fp-ok fp-done">
           You invested {amount(done.principal)}. Deposit #{String(done.id)}, matures {formatTime(done.maturity, cycleDuration < 86400n)}.
         </p>
+        {done.principal < done.asked && (
+          <p className="fp-muted">
+            You asked for {amount(done.asked)}, but another investment came in first and only {amount(done.principal)} was left in the raise. The other{' '}
+            {amount(done.asked - done.principal)} never left your wallet. The project is still allowed to take it, but only if you invest again yourself.
+          </p>
+        )}
         <button type="button" className="fp-btn fp-btn-quiet" onClick={() => setDone(null)}>
           Invest more
         </button>

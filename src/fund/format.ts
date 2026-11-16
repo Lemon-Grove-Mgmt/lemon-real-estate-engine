@@ -14,11 +14,31 @@ export function formatAmount(value: bigint, decimals: number, dp = 2): string {
   return BigInt(int).toLocaleString('en-US') + (cut ? `.${cut}` : '');
 }
 
-/** Typed amount → token units: 0 when empty, null when it isn't a number. */
+/**
+ * What was typed, as digits with a decimal point, or null when it can't be
+ * read safely. A comma is a thousands separator only in groups of three
+ * ("10,000.50"); otherwise it's the decimal comma most of the world types,
+ * and the only one a phone's keypad offers there ("10000,50", "10.000,50").
+ * Stripping every comma would read "10000,50" as 1,000,050.
+ */
+function plainNumber(typed: string): string | null {
+  if (!typed.includes(',')) return /^\d*\.?\d*$/.test(typed) ? typed : null;
+  if (/^\d{1,3}(,\d{3})+(\.\d*)?$/.test(typed)) return typed.replace(/,/g, '');
+  if (/^\d{1,3}(\.\d{3})+,\d*$/.test(typed)) return typed.replace(/\./g, '').replace(',', '.');
+  if (/^\d*,\d*$/.test(typed)) return typed.replace(',', '.');
+  return null;
+}
+
+/**
+ * Typed amount → token units: 0 when empty, null when it isn't a number or
+ * has more decimals than the token (parseUnits would round those, sometimes up).
+ */
 export function parseAmount(text: string, decimals: number): bigint | null {
-  const clean = text.replace(/,/g, '').trim();
-  if (!clean) return 0n;
-  if (!/^\d*\.?\d*$/.test(clean)) return null;
+  const typed = text.trim();
+  if (!typed) return 0n;
+  const clean = plainNumber(typed);
+  if (clean === null || !/\d/.test(clean)) return null;
+  if ((clean.split('.')[1] ?? '').length > decimals) return null;
   try {
     return parseUnits(clean, decimals);
   } catch {

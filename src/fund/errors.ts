@@ -65,6 +65,11 @@ const OTHER_ERRORS = parseAbi([
   'error NotRequestOwner()',
   'error ActiveBoostsPending()',
   'error Unauthorized()',
+  'error TooManyOpenRequests()',
+  'error TooManyDepositBuckets()',
+  'error DepositModeMismatch()',
+  'error BelowMinimumWithdrawal()',
+  'error InvalidRecipient(address to)',
   'error Reverted(string why)',
   'error BelowFloor(uint256 price, uint256 minPrice)',
   'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
@@ -80,6 +85,14 @@ const OTHER_MESSAGES: Record<string, string> = {
   NoEarningsAvailable: 'There are no pool earnings to collect.',
   SweepRequired: 'The pool has to process its earnings before they can be collected. Try again later.',
   NoPriceAvailable: "The pool's price feed has no price right now. Try again later.",
+  NativeFeeTransferFailed: "The pool couldn't take its BNB fee. Try again.",
+  UtilizationBelowThreshold: "The Loans pool isn't taking new deposits right now, because too little of it is lent out. Try again later.",
+  LockDurationNotAvailable: "The Loans pool no longer offers this project's lock period, so it can't take this deposit.",
+  AssetNotSupported: "The Loans pool isn't accepting this token right now.",
+  TooManyOpenRequests: 'The pool allows five open withdrawal requests at a time. Claim one that has been funded first.',
+  TooManyDepositBuckets: "The project has reached the pool's limit on separate deposits. Room frees up as earlier ones unlock.",
+  DepositModeMismatch: "The pool already holds another kind of deposit for this project with the same unlock date. Try again after the pool's next unlock date.",
+  BelowMinimumWithdrawal: "That's below the pool's minimum withdrawal.",
   BelowFloor: 'LEMX is priced below the floor right now.',
   ERC20InsufficientBalance: "This wallet doesn't have enough of the token.",
   ERC20InsufficientAllowance: "The project isn't allowed to take that much of the token yet.",
@@ -129,7 +142,12 @@ export function explain(e: unknown, amount: (v: unknown) => string = String, noR
       const name = revert.data?.errorName;
       if (name && MESSAGES[name]) return MESSAGES[name](revert.data?.args ?? [], amount);
       const other = otherErrorName(revert.raw);
-      if (other) return OTHER_MESSAGES[other] ?? `The pool refused it (${other}).`;
+      if (other) {
+        if (OTHER_MESSAGES[other]) return OTHER_MESSAGES[other];
+        // No wording for it yet: keep the contract's name out of the page, and tell whoever is debugging.
+        console.warn(`The pool refused a call with ${other}.`);
+        return 'The Loans pool refused it. Try again later.';
+      }
       // A plain revert string, like a BEP20 token's. With no revert data the
       // "reason" is only the node's "execution reverted", which says nothing.
       if (revert.reason && revert.raw && revert.raw !== '0x') return `Refused: ${revert.reason}.`;
