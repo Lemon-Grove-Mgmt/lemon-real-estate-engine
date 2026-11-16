@@ -351,7 +351,8 @@ export function derive(v: View): Derived {
   const head = v.head;
   const headOverdue = !!head && !head.repaid && BigInt(head.maturity) <= now;
   const otherOverdue = u.overdue.filter((id) => !head || id !== head.id);
-  const ids = (xs: readonly bigint[]) => xs.map((x) => `#${x}`).join(', ');
+  // A long raise can have hundreds past maturity: name the first few.
+  const ids = (xs: readonly bigint[]) => (xs.length > 6 ? `${xs.slice(0, 5).map((x) => `#${x}`).join(', ')} and ${xs.length - 5} more` : xs.map((x) => `#${x}`).join(', '));
   const pastMaturity = `${otherOverdue.length === 1 ? 'Deposit' : 'Deposits'} ${ids(otherOverdue)} ${otherOverdue.length === 1 ? 'is' : 'are'} past maturity`;
   // payoffNext pays the deposit's due cycles first, which fails while it's the one waiting.
   const headBlocked = !!head && waiting && s.blockedFrom === head.id;

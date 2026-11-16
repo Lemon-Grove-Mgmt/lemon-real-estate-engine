@@ -5,7 +5,9 @@ import { projectAbi } from './abi';
 import { CLASS_NAMES, formatAmount, formatRate, formatTime } from './format';
 import { collectPlan, type Position, type PositionStatus } from './positions';
 import type { Deposit, ProjectData } from './queries';
-import { useSend } from './tx';
+import { usePublicClient } from 'wagmi';
+import { payCountThatFits } from './gas';
+import { newToast, useSend } from './tx';
 import { Row, plural, type Tone } from './ui';
 
 const STATUS: Record<PositionStatus, { label: string; tone: Tone }> = {
@@ -27,6 +29,7 @@ export interface PositionContext {
 
 export function PositionCard({ p, ctx }: { p: Position; ctx: PositionContext }) {
   const send = useSend();
+  const client = usePublicClient();
   const [busy, setBusy] = useState(false);
   const [paid, setPaid] = useState<bigint | null>(null);
   const { project, token, cycleDuration, data, deposits, now } = ctx;
@@ -42,14 +45,26 @@ export function PositionCard({ p, ctx }: { p: Position; ctx: PositionContext }) 
     setBusy(true);
     setPaid(null);
     try {
-      const receipt = await send(
-        `Collect interest on deposit #${d.id}`,
-        { address: project, abi: projectAbi, functionName: 'payDue', args: [plan.from, plan.count] },
-        { project, amount: (v) => amount(BigInt(v as bigint)) },
-      );
-      if (!receipt) return;
-      const mine = parseEventLogs({ abi: projectAbi, eventName: 'InterestPaid', logs: receipt.logs }).filter((l) => l.args.depositId === d.id);
-      setPaid(mine.reduce((t, l) => t + l.args.amount, 0n));
+      // Older deposits are paid first. With many of them, or many cycles owed, that's more than
+      // one transaction can hold, so it goes in as many as it takes, under one toast.
+      const toast = newToast();
+      const end = plan.from + plan.count;
+      let total = 0n;
+      for (let from = plan.from, part = 1; from < end; part++) {
+        const count = client ? await payCountThatFits(client, project, from, end - from) : end - from;
+        const receipt = await send(
+          part === 1 ? `Collect interest on deposit #${d.id}` : `Collect interest on deposit #${d.id} (part ${part})`,
+          { address: project, abi: projectAbi, functionName: 'payDue', args: [from, count] },
+          { project, amount: (v) => amount(BigInt(v as bigint)), toast },
+        );
+        if (!receipt) return;
+        const logs = parseEventLogs({ abi: projectAbi, logs: receipt.logs });
+        total += logs.reduce((t, l) => (l.eventName === 'InterestPaid' && l.args.depositId === d.id ? t + l.args.amount : t), 0n);
+        // A deposit ahead is waiting for money: nothing after it can be paid yet.
+        if (logs.some((l) => l.eventName === 'InterestWaiting')) break;
+        from += count;
+      }
+      setPaid(total);
     } catch {
       // The toast says why.
     } finally {

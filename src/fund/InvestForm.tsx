@@ -2,11 +2,12 @@
 // acknowledgments before a first deposit in the project, the deposit
 // confirmation, then approve the exact amount and deposit.
 import { useId, useState } from 'react';
+import { usePublicClient } from 'wagmi';
 import { erc20Abi, parseEventLogs, type Address, type Chain } from 'viem';
 import { projectAbi } from './abi';
 import type { Disclosures } from './disclosures';
 import { CLASS_NAMES, formatAmount, formatDuration, formatTime, parseAmount, plainAmount, ratePercent, shortAddress } from './format';
-import type { ProjectData, useWallet } from './queries';
+import { useRefreshProject, type ProjectData, type useWallet } from './queries';
 import { Rich, RichLine } from './Rich';
 import { newToast, useSend, useTxNote } from './tx';
 
@@ -29,6 +30,8 @@ interface Props {
 export function InvestForm({ project, title, account, chain, token, cycleDuration, data, wallet, first, disclosures }: Props) {
   const send = useSend();
   const note = useTxNote();
+  const client = usePublicClient();
+  const refresh = useRefreshProject();
   const id = useId();
   const [text, setText] = useState('');
   const [acked, setAcked] = useState<boolean[]>([]);
@@ -82,6 +85,22 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
     try {
       // One toast for the allowance and the investment, so it can say what was actually invested.
       const toast = newToast();
+      // The page's figures are up to 30 seconds old. If the wallet's investor type changed
+      // meanwhile, the deposit would be recorded at another rate than the one shown and agreed to.
+      const typeNow = client ? await client.readContract({ address: project, abi: projectAbi, functionName: 'investorClass', args: [account] }) : wallet.investorClass;
+      if (typeNow !== wallet.investorClass) {
+        const rateNow = typeNow === 1 ? config.usInterestRate : config.globalInterestRate;
+        note(
+          `Invest ${amount(fill)}`,
+          typeNow === 0
+            ? 'This wallet is no longer approved for this project. Nothing was sent.'
+            : `Your investor type is now ${CLASS_NAMES[typeNow]}, at ${ratePercent(rateNow)}% per cycle, which isn't what this page showed. Nothing was sent: check the terms, then invest again.`,
+          true,
+          toast,
+        );
+        refresh(project);
+        return;
+      }
       const opts = { project, amount: (v: unknown) => amount(BigInt(v as bigint)), toast };
       if (needsApproval) {
         const approved = await send(`Allow ${amount(fill)}`, { address: token.address, abi: erc20Abi, functionName: 'approve', args: [project, fill] }, opts);

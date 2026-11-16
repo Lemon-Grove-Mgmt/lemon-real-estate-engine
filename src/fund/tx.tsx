@@ -12,6 +12,7 @@ import { WaitForTransactionReceiptTimeoutError, erc20Abi, type Abi, type Address
 import { useAccount, useConfig, usePublicClient } from 'wagmi';
 import { switchChain, writeContract } from 'wagmi/actions';
 import { explain, isAllowanceRefusal } from './errors';
+import { gasLimit } from './gas';
 import { useRefreshProject } from './queries';
 
 export interface Call {
@@ -56,15 +57,8 @@ type Note = (label: string, detail: string, failed?: boolean, toast?: number) =>
 
 const TxContext = createContext<{ send: Send; note: Note } | null>(null);
 
-/** Public RPC gas estimates can come in about 1% short (seen in the fund console). */
-const GAS_PAD = (gas: bigint) => (gas * 13n) / 10n;
-/**
- * Calls that pay every due cycle first cost more for each cycle that comes due
- * while the wallet waits (about 22,000 gas a cycle): room for a dozen more.
- * Unused gas isn't charged.
- */
+/** Calls that pay every due cycle first, and so cost more the longer the wallet waits (gas.ts). */
 const PAYS_DUE_CYCLES = new Set(['payDue', 'payoffNext']);
-const GROWTH_ROOM = 300_000n;
 const PENDING_KEY = 'fund-pending-tx';
 /** At most this many toasts stack; the oldest go first. */
 const MAX_TOASTS = 6;
@@ -230,7 +224,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         const request = { ...call, account: address };
         await client!.simulateContract(request);
         const estimate = await client!.estimateContractGas(request);
-        gas = GAS_PAD(estimate) + (PAYS_DUE_CYCLES.has(call.functionName) ? GROWTH_ROOM : 0n);
+        gas = gasLimit(estimate, PAYS_DUE_CYCLES.has(call.functionName));
         if (!contractWallets.current.has(address)) {
           const code = await client!.getCode({ address });
           contractWallets.current.set(address, Boolean(code) && !DELEGATED_ACCOUNT.test(code!));

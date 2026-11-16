@@ -135,6 +135,10 @@ export const POOL_PAUSED_FAILED = 'The Loans pool is paused, which is likely why
  * for a call that fails without a reason, when the caller knows a likelier cause.
  */
 export function explain(e: unknown, amount: (v: unknown) => string = String, noReason?: string): string {
+  // The wallet's account changed between two steps of one action (wagmi's ConnectorAccountNotFoundError).
+  if (e instanceof Error && /not found for connector/i.test(e.message)) {
+    return "Your wallet's account changed partway through, so nothing more was sent. Start again from the account you want to use.";
+  }
   if (e instanceof BaseError) {
     if (e.walk((x) => x instanceof UserRejectedRequestError)) return 'You cancelled in your wallet.';
     const revert = e.walk((x) => x instanceof ContractFunctionRevertedError);

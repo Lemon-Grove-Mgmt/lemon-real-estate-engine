@@ -35,6 +35,7 @@ export function Settings() {
 
 function Team() {
   const v = useV();
+  const client = usePublicClient();
   const ix = useIxProject(v.listing.project);
   const [role, setRole] = useState<Role>('MANAGER_ROLE');
   const [who, setWho] = useState('');
@@ -98,6 +99,9 @@ function Team() {
             disabled={!isAddress(who.trim())}
             reason="Enter a wallet address."
             run={async (ctx) => {
+              // The contract accepts a role the wallet already has and changes nothing: don't spend a transaction on it.
+              const held = await client!.readContract({ address: v.listing.project, abi: projectAbi, functionName: 'hasRole', args: [ROLE_ID[role], who.trim() as Address] });
+              if (held) throw new Error(`That wallet already has the ${ROLE_LABEL[role]} role. Nothing was sent.`);
               await ctx.send(`Give the ${ROLE_LABEL[role]} role`, { functionName: 'grantRole', args: [ROLE_ID[role], who.trim() as Address] });
               ctx.done(`${ROLE_LABEL[role]} role given.`);
             }}

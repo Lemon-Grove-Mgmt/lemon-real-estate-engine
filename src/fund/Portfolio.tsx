@@ -7,7 +7,7 @@ import { formatAmount } from './format';
 import { ConnectPrompt } from './InvestPanel';
 import { PositionCard } from './PositionCard';
 import { positionsFor } from './positions';
-import { depositsQuery, linkQuery, projectQuery, type Listing, type Trust } from './queries';
+import { depositsQuery, linkQuery, projectQuery, same, type Listing, type Trust } from './queries';
 import { useChainNow } from './ui';
 
 interface Props {
@@ -16,7 +16,9 @@ interface Props {
   chain: Chain;
 }
 
-export default function Portfolio({ listings, trust, chain }: Props) {
+export default function Portfolio({ listings: linked, trust, chain }: Props) {
+  // Two listings can link to one project: its positions show, and count, once.
+  const listings = linked.filter((l, i) => linked.findIndex((x) => same(x.project, l.project)) === i);
   const client = usePublicClient();
   const { address, isConnected } = useAccount();
   const now = useChainNow(0);

@@ -215,6 +215,9 @@ function check(f: Form, factory: Factory, account: Address | undefined, owners: 
     const v = f[key].trim() || account || '';
     if (f[key].trim() && !isAddress(f[key].trim())) errors[key] = "That isn't a wallet address.";
     else if (v && same(v, zeroAddress)) errors[key] = "The zero address can't receive anything.";
+    // The contract accepts any address, and a payout wallet can only be changed by itself:
+    // money sent to one of the fund's own contracts would stay there.
+    else if (v && [factory.address, factory.usdt, factory.lemx].some((a) => same(a, v))) errors[key] = "That's one of the fund's own contracts, not a wallet.";
     return (isAddress(v) ? v : zeroAddress) as Address;
   };
 
@@ -576,8 +579,10 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
           <Kv k="Cycle" v={cycle} />
           <Kv k="Term / renewal" v={`${dur(c.params.term)} / ${dur(c.params.renewalTerm)}`} />
           <Kv k={`Pool lock (principal / ${factory.lemxSymbol})`} v={`${dur(c.params.principalLockDuration)} / ${dur(c.params.compoundLockDuration)}`} />
-          <Kv k="Owner" v={<span className="mg-mono">{shortAddress(c.owner)}</span>} />
-          <Kv k="Company / fee wallet" v={<span className="mg-mono">{`${shortAddress(c.params.companyWallet)} / ${shortAddress(c.params.mgmtFeeWallet)}`}</span>} />
+          {/* In full: these can't be changed by anyone else later, so they're compared with the signed terms character by character. */}
+          <Kv k="Owner" v={<span className="mg-mono mg-break">{c.owner}</span>} />
+          <Kv k="Company wallet" v={<span className="mg-mono mg-break">{c.params.companyWallet}</span>} />
+          <Kv k="Fee wallet" v={<span className="mg-mono mg-break">{c.params.mgmtFeeWallet}</span>} />
         </Kvs>
         <div className="mg-stack mg-create-foot">
           {!c.ok ? (

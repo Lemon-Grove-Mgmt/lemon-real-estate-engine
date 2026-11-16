@@ -5,12 +5,13 @@ import { useSyncExternalStore } from 'react';
 import { parseEventLogs, type PublicClient, type TransactionReceipt } from 'viem';
 import { projectAbi } from '../abi';
 import { NONE, formatAmount } from '../format';
+import { payCountThatFits } from '../gas';
 import { same } from '../queries';
 import { plural } from '../ui';
 import type { JobCtx } from './ui';
 import type { QuickAction, View } from './view';
 
-/** Deposits per payDue call: keeps each transaction well under the block gas limit. */
+/** The most deposits per payDue call. A run that is far behind takes fewer, so it fits in one transaction (gas.ts). */
 export const PAY_BATCH = 50n;
 
 /** The project's events in a receipt, decoded, in log order. */
@@ -77,7 +78,11 @@ function paySummary(t: PayTally, v: View, current: boolean) {
   const paid = [...t.interest].sort(([a], [b]) => (a < b ? -1 : 1));
   if (paid.length) {
     const total = paid.reduce((s, [, x]) => s + x.amount, 0n);
-    const each = paid.map(([id, x], i) => `${i ? '#' : 'deposit #'}${id} (${plural(x.cycles, 'cycle')})`).join(', ');
+    // A big run pays hundreds of deposits: past a handful, count them instead of naming each.
+    const each =
+      paid.length > 6
+        ? `${plural(paid.length, 'deposit')}, ${plural(paid.reduce((n, [, x]) => n + x.cycles, 0), 'cycle')} in all`
+        : paid.map(([id, x], i) => `${i ? '#' : 'deposit #'}${id} (${plural(x.cycles, 'cycle')})`).join(', ');
     parts.push(`Paid ${v.amount(total)} of interest: ${each}.`);
   } else parts.push('No interest paid.');
   const fees = [
@@ -122,7 +127,8 @@ export async function payInvestors(ctx: JobCtx, v: View, client: PublicClient) {
       return finish(run === 1 ? 'Payments were already current.' : paySummary(t, v, true), block.timestamp);
     }
     const from = blocked !== NONE && blocked < cursor ? blocked : cursor;
-    const rc = await ctx.send(run === 1 ? 'Pay investors' : `Pay investors (run ${run})`, { functionName: 'payDue', args: [from, PAY_BATCH] });
+    const count = await payCountThatFits(client, p, from, PAY_BATCH);
+    const rc = await ctx.send(run === 1 ? 'Pay investors' : `Pay investors (run ${run})`, { functionName: 'payDue', args: [from, count] });
     tallyReceipt(t, rc, v);
     if (t.waiting) return finish(paySummary(t, v, false), block.timestamp);
   }

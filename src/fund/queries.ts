@@ -86,6 +86,10 @@ export const linkQuery = (client: PublicClient | undefined, trust: Trust, projec
         }),
       ]);
       if (factory.status !== 'success' || owner.status !== 'success' || usdt.status !== 'success' || cycleDuration.status !== 'success') {
+        // A network that didn't answer fails every read the same way a wrong address does. That's an
+        // outage, not a bad link: fail the check (the page says it couldn't load and tries again)
+        // instead of telling an investor the project, and their investment, isn't there.
+        if ((await client!.getChainId()) !== client!.chain!.id) throw new Error('The network answered as a different chain.');
         return { trusted: false, reason: `${project} isn't a fund project on this network` };
       }
       const i = factories.findIndex((f) => same(f, factory.result));
