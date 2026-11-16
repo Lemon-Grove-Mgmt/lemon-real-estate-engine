@@ -75,8 +75,7 @@ this public repo.
    `trustedOwners`, never replaces it (D1.8).
 
    For the WalletConnect cases add loans-dapp's Reown project ID as
-   `walletConnectProjectId`, and the test site's address to that Reown
-   project's allowlist.
+   `walletConnectProjectId`. The project has no domain allowlist.
 2. **The indexer** (lists and history on `/manage/`). Use the deployed
    indexer, with the test site's origin in its `DASHBOARD_ORIGIN`, or run one
    locally from real-estate-fund:
@@ -394,7 +393,7 @@ test site and an indexer at it, walk this plan, and check:
 
 And for the site and the contracts:
 
-- [ ] WalletConnect on a phone, with loans-dapp's Reown project ID and the site's domains in its allowlist.
+- [ ] WalletConnect on a phone, with loans-dapp's Reown project ID.
 - [ ] The deployed indexer with the site's domains (and preview domain) in `DASHBOARD_ORIGIN`.
 - [ ] The Safe flow on BSC mainnet: an action from a Safe says "Sent to your Safe" and the page updates once the signers approve.
 - [ ] A stage deploy with a `fund` block.

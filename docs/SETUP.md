@@ -131,12 +131,17 @@ things are set up once for the whole org, not per client:
    ```
 
    `chainId` is 97 (BSC testnet) or 56 (BSC). `factories` and `lens` come
-   from real-estate-fund's `contracts/deployments/`. `walletConnectProjectId` is
-   loans-dapp's Reown project ID; add the site's domains to that project's
-   allowlist in the Reown dashboard. Without it, only browser wallets can
-   connect. `indexerUrl` is real-estate-fund's indexer Worker, for the lists
-   and history on `/manage/`; add the site's domains to the indexer's
-   `DASHBOARD_ORIGIN`. Both stay where they are: a site in the Lemon Grove
+   from real-estate-fund's `contracts/deployments/`: `bsc-latest.json` for
+   mainnet (factory `0xA3cC2d0DF5c7d040da5f2C3935CC006A7f8Cd00c`, lens
+   `0x713Ad87070724857006bFbE90D205644e6561679`, live since 2026-11-11),
+   `bscTestnet*-latest.json` for testnet. `walletConnectProjectId` is
+   loans-dapp's Reown project ID. It has no domain allowlist, so there's
+   nothing to set up per site. Without it, only browser wallets can
+   connect. `indexerUrl` is real-estate-fund's indexer Worker for the same
+   chain, for the lists and history on `/manage/`; add the site's domains to
+   that indexer's `DASHBOARD_ORIGIN`. The deployed `real-estate-indexer` reads
+   testnet only: leave `indexerUrl` out of a mainnet site until a mainnet
+   indexer exists (real-estate-fund `docs/MAINNET_HANDOFF.md`). Both stay where they are: a site in the Lemon Grove
    account uses them across accounts by its domain alone. Without it, `/manage/` works but says those lists are
    unavailable, and it only finds projects a listing links to or that were
    created in that browser. A mistake in this block fails the build with a
@@ -246,7 +251,7 @@ Only a site in **another** Cloudflare account needs a deploy hook:
 - [ ] `https://<site>/admin/` → **Sign in with GitHub** works for you and the client
 - [ ] Save a small edit, and it's live within about two minutes
 - [ ] With a `fund` block: the site's domains are in the indexer's
-      `DASHBOARD_ORIGIN` and the Reown project's allowlist, and a wallet
+      `DASHBOARD_ORIGIN` (when it has an `indexerUrl`), and a wallet
       connects on a linked listing
 - [ ] Send the client their `/admin/` link and point them to `EDITING.md`
 
