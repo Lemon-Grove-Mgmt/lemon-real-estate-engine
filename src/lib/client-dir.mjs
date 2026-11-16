@@ -35,7 +35,7 @@ export function readClientConfig() {
   };
 }
 
-// Chains the wallet pages support. BSC testnet first; mainnet once there's a factory on it.
+// Chains the wallet pages support: BSC testnet and BSC mainnet (factory live since 2026-11-11).
 export const FUND_CHAINS = [97, 56];
 
 export const isAddress = (v) => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v);

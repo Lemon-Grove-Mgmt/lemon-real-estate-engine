@@ -296,9 +296,8 @@ else works: balances, the investor table and every action read the chain.
   WalletConnect metadata, so a phone wallet shows the client, not Lemon.
 - **WalletConnect project ID:** the same Reown project as loans-dapp (the
   value loans-dapp sets as `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`), set in
-  `site.config.json` (`fund.walletConnectProjectId`). It's public. Each client
-  domain and its preview domain must be added to the project's domain
-  allowlist in the Reown dashboard.
+  `site.config.json` (`fund.walletConnectProjectId`). It's public. The
+  project has no domain allowlist, so client domains need no setup there.
 - **Chains:** `bscTestnet` (97) first, and `bsc` (56) later, copied from loans-dapp with
   `multicall3` at `0xca11bde05977b3631167028862be2a173976ca11`. Port
   `src/config/rpc.ts`, `transport.ts` and `stickyFallback.ts`: Binance
