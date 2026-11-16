@@ -33,7 +33,7 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
   const [text, setText] = useState('');
   const [acked, setAcked] = useState<boolean[]>([]);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ id: bigint; principal: bigint; maturity: bigint; asked: bigint } | null>(null);
+  const [done, setDone] = useState<{ id: bigint; principal: bigint; maturity: bigint } | null>(null);
 
   const { state, config } = data;
   const fmt = (v: bigint) => formatAmount(v, token.decimals);
@@ -92,8 +92,9 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
       if (!receipt) return;
       const [ev] = parseEventLogs({ abi: projectAbi, eventName: 'DepositRecorded', logs: receipt.logs });
       if (ev) {
-        setDone({ id: ev.args.depositId, principal: ev.args.principal, maturity: ev.args.maturity, asked: fill });
-        // Someone else invested first: the contract takes only what's left of the raise.
+        setDone({ id: ev.args.depositId, principal: ev.args.principal, maturity: ev.args.maturity });
+        // Someone else invested first: the contract takes only what's left of the raise. That
+        // fills it, so this form goes and the toast is where the investor reads it.
         if (ev.args.principal < fill) note(`Invest ${amount(fill)}`, `Invested ${amount(ev.args.principal)}: that was all that was left in the raise.`, false, toast);
       }
       setText('');
@@ -111,12 +112,6 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
         <p className="fp-ok fp-done">
           You invested {amount(done.principal)}. Deposit #{String(done.id)}, matures {formatTime(done.maturity, cycleDuration < 86400n)}.
         </p>
-        {done.principal < done.asked && (
-          <p className="fp-muted">
-            You asked for {amount(done.asked)}, but another investment came in first and only {amount(done.principal)} was left in the raise. The other{' '}
-            {amount(done.asked - done.principal)} never left your wallet. The project is still allowed to take it, but only if you invest again yourself.
-          </p>
-        )}
         <button type="button" className="fp-btn fp-btn-quiet" onClick={() => setDone(null)}>
           Invest more
         </button>
