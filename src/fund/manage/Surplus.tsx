@@ -283,7 +283,7 @@ function Compounding() {
               note={feeNote(v, fee)}
               body={
                 <p>
-                  What hasn't been swapped goes back to the money set aside for LEMX. The LEMX bought so far is locked in the pool, or held until there's enough to lock if it's below the pool's minimum
+                  What hasn't been swapped goes back to the money set aside for LEMX. The LEMX bought so far is collected into the project. Locking it in the pool is a separate step, once there's at least the pool's minimum
                   {v.u.poolMinimum !== null && ` (${v.amount(v.u.poolMinimum)})`}.
                 </p>
               }
@@ -325,7 +325,7 @@ function Compounding() {
             </ActionButton>
           }
         >
-          It was below the pool's minimum when the last purchase finished.
+          Collected from a LEMX purchase and not in the pool yet.
         </Callout>
       )}
       <ActionButton

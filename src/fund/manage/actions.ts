@@ -31,13 +31,14 @@ export function count(rc: TransactionReceipt, v: View, name: string): { n: numbe
 }
 
 /**
- * Where the LEMX went when a purchase finished or was cancelled: locked in
- * the pool, or held because it's below the pool's minimum. Empty if none was bought.
+ * Where the LEMX went when a purchase finished or was cancelled: held in the
+ * project for the separate lock step (always, since contract version 6), or
+ * locked in the pool by an older project. Empty if none was bought.
  */
 export function lemxOutcome(rc: TransactionReceipt, v: View): string {
   if (events(rc, v, 'LemxDeposited').length) return 'The LEMX bought is locked in the pool.';
   const bought = events(rc, v, 'CompoundFinalized').reduce((t, a) => t + (a.lemxReceived as bigint), 0n);
-  return bought > 0n ? "The LEMX bought is below the pool's minimum, so it's held until there's enough to lock." : '';
+  return bought > 0n ? 'The LEMX bought is held in the project until it’s locked in the pool.' : '';
 }
 
 /** What a payment run did, added up over its transactions. */

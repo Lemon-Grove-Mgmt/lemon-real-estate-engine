@@ -123,8 +123,8 @@ things are set up once for the whole org, not per client:
    ```json
    "fund": {
      "chainId": 97,
-     "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
-     "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
+     "factories": ["0x4F0810b75e9703FB44528144A52113bF1f829fCb"],
+     "lens": "0x1a6a4698994443De3366216607B5aB8e92E7ec24",
      "walletConnectProjectId": "…",
      "indexerUrl": "https://…"
    }

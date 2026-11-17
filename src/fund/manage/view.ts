@@ -484,7 +484,7 @@ export function derive(v: View): Derived {
     const market = lemxMarket(u);
     t.push(
       u.swap.done
-        ? { id: 'finalize', severity: 'action', title: 'LEMX purchase finished', detail: 'Collect the LEMX bought and lock it in the pool, or hold it while it’s below the pool’s minimum.', quick: { action: 'finalizeCompound', label: 'Finish' }, section: 'surplus', need: null }
+        ? { id: 'finalize', severity: 'action', title: 'LEMX purchase finished', detail: 'Collect the LEMX bought into the project. Locking it in the pool is a separate step.', quick: { action: 'finalizeCompound', label: 'Finish' }, section: 'surplus', need: null }
         : market > 0n && market < v.ledger.compoundMinPrice
         ? {
             id: 'compounding',
@@ -508,8 +508,8 @@ export function derive(v: View): Derived {
   } else if (s.lemxHeld > 0n)
     t.push(
       u.lemxLockable
-        ? { id: 'held', severity: 'action', title: 'LEMX waiting to be locked', detail: "It was below the pool's minimum when the purchase finished. Lock it now.", quick: { action: 'depositHeldLemx', label: 'Lock LEMX' }, section: 'surplus', need: null }
-        : { id: 'held', severity: 'info', title: 'LEMX waiting to be locked', detail: "It's still below the pool's minimum deposit. It can be locked once a later purchase adds to it.", section: 'surplus', need: null },
+        ? { id: 'held', severity: 'action', title: 'LEMX waiting to be locked', detail: 'It was collected from a LEMX purchase and isn’t in the pool yet. Lock it now.', quick: { action: 'depositHeldLemx', label: 'Lock LEMX' }, section: 'surplus', need: null }
+        : { id: 'held', severity: 'info', title: 'LEMX waiting to be locked', detail: "It's below the pool's minimum deposit. It can be locked once a later purchase adds to it.", section: 'surplus', need: null },
     );
 
   // The manager's decisions, once investors are current.

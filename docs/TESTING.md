@@ -57,8 +57,8 @@ this public repo.
    ```json
    "fund": {
      "chainId": 97,
-     "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
-     "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
+     "factories": ["0x4F0810b75e9703FB44528144A52113bF1f829fCb", "0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
+     "lens": "0x1a6a4698994443De3366216607B5aB8e92E7ec24",
      "trustedOwners": ["<W1>"],
      "indexerUrl": "http://localhost:8787"
    }
@@ -118,7 +118,7 @@ this public repo.
    | | |
    |---|---|
    | Engine QA project | `0x7fAB1DA7b651c3056131F4AD0067276763B365EE` (owner W1, linked to Example Listing One) |
-   | Factory / lens | `0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1` / `0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2` |
+   | Factory / lens | Version 6: `0x4F0810b75e9703FB44528144A52113bF1f829fCb` / `0x1a6a4698994443De3366216607B5aB8e92E7ec24`. The QA project above is from the version 5 factory `0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1`, which stays in `fund.factories` so it still shows |
    | tUSDT | `0xb3414bB6e640783931360833765E4d565D5bfF01` |
 
 7. **Timing.** Sandbox cycles are 5 minutes, the pool lock 30 minutes and the
@@ -301,9 +301,9 @@ link them to a listing in the editor. D1.1–D1.4 follow the dashboard's cases.
 |---|---|---|---|
 | D7.1 ✅ | W2 → **Start buying LEMX** | The card shows 0 of 24 slices, the next slice time, the floor and the market price; header badge **Buying LEMX** | `CompoundStarted(id, swapId, amount, 24, 3600, minPrice)`, minPrice = market × (1 − slippage); set-aside → 0, in flight = amount. Sims: starting again `CompoundInFlight`, finishing now `CompoundNotFinished` |
 | D7.2 ✅ | Console: fill a few slices | Progress updates; Overview shows **Buying LEMX: n of 24 slices filled** | The scheduler's swap: slices completed, LEMX bought |
-| D7.3 ✅ | Console: fill the rest | **LEMX purchase finished** → **Finish** appears exactly when nothing is left to swap. Finishing locks the LEMX in the pool | `CompoundFinalized`, `LemxDeposited(lemx, credit, unlock)` with credit at the feed price; pool principal + credit |
+| D7.3 ✅ | Console: fill the rest | **LEMX purchase finished** → **Finish** appears exactly when nothing is left to swap. Finishing locks the LEMX in the pool (version 5, as run). On version 6, not yet re-run: Finish only collects the LEMX, the message says it is held, and **Lock now** locks it | Version 5: `CompoundFinalized`, `LemxDeposited(lemx, credit, unlock)` with credit at the feed price; pool principal + credit. Version 6: `CompoundFinalized` with credit 0 and LEMX held > 0, then `LemxDeposited` from `depositHeldLemx` |
 | D7.4 ✅ | Start again → **Lower floor** → **Cancel the purchase** (confirm) | The floor drops; unswapped tUSDT goes back to the LEMX set-aside; Activity reads **LEMX purchase #N ended early** | `CompoundFloorEscalated(id, old, new)`; sim a higher floor `FloorNotLower`. Cancel: `CompoundFinalized` with the unswapped amount returned; set-aside + that amount |
-| D7.5 ✅ | LEMX below the pool's minimum when a purchase finishes | **LEMX waiting to be locked** → **Lock now** once it can be locked (until then it says why). The Finish or Cancel message says the LEMX is held, not locked | No `LemxDeposited`; LEMX held > 0; sim `depositHeldLemx` `BelowLpMinimum` until it reaches the minimum, then `LemxDeposited` |
+| D7.5 ✅ | LEMX below the pool's minimum when a purchase finishes (on version 6 every purchase leaves LEMX held; this row is the below-minimum case) | **LEMX waiting to be locked** → **Lock now** once it can be locked (until then it says why). The Finish or Cancel message says the LEMX is held, not locked | No `LemxDeposited`; LEMX held > 0; sim `depositHeldLemx` `BelowLpMinimum` until it reaches the minimum, then `LemxDeposited` |
 | D7.6 ✅ | A purchase running; console **Set LEMX $** above the start price × (1 + slippage), e.g. 9.5 | The card's badge reads **Below the floor** with a warning; the overview has the to-do **Buying LEMX: the market is below the floor** → **Lower floor** clears both. Set the price back afterwards | Console **Fill slices**: `BelowFloor(price, minPrice)` (the slice is skipped). After lowering: `CompoundFloorEscalated` and slices fill |
 
 ## D8. Repayment (first in, first out)
