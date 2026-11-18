@@ -132,20 +132,34 @@ things are set up once for the whole org, not per client:
 
    `chainId` is 97 (BSC testnet) or 56 (BSC). `factories` and `lens` come
    from real-estate-fund's `contracts/deployments/`: `bsc-latest.json` for
-   mainnet (factory `0xA3cC2d0DF5c7d040da5f2C3935CC006A7f8Cd00c`, lens
-   `0x713Ad87070724857006bFbE90D205644e6561679`, live since 2026-11-11),
-   `bscTestnet*-latest.json` for testnet. `walletConnectProjectId` is
-   loans-dapp's Reown project ID. It has no domain allowlist, so there's
-   nothing to set up per site. Without it, only browser wallets can
-   connect. `indexerUrl` is real-estate-fund's indexer Worker for the same
-   chain, for the lists and history on `/manage/`; add the site's domains to
-   that indexer's `DASHBOARD_ORIGIN`. The deployed `real-estate-indexer` reads
-   testnet only: leave `indexerUrl` out of a mainnet site until a mainnet
-   indexer exists (real-estate-fund `docs/MAINNET_HANDOFF.md`). Both stay where they are: a site in the Lemon Grove
-   account uses them across accounts by its domain alone. Without it, `/manage/` works but says those lists are
-   unavailable, and it only finds projects a listing links to or that were
-   created in that browser. A mistake in this block fails the build with a
-   message naming the field.
+   mainnet, `bscTestnet*-latest.json` for testnet. For mainnet that's
+   VERSION 6, live since 2026-11-17:
+
+   | Mainnet (`chainId` 56) | Value |
+   |---|---|
+   | `factories` | `["0x7bB92060769225e8e918f6233d1E95EBEeC6CF79"]` |
+   | `lens` | `0x1Ebe90dF6d4F620A8A4f4d223C880d392ca5D34f` |
+   | `indexerUrl` | `https://real-estate-indexer-mainnet.clients-lemon.workers.dev` |
+
+   The VERSION 5 mainnet factory (`0xA3cC…d00c`) is retired: don't use it
+   for new sites. The example above is the testnet sandbox that the stage
+   site and the testnet indexer use.
+
+   `walletConnectProjectId` is loans-dapp's Reown project ID. It has no
+   domain allowlist, so there's nothing to set up per site. Without it, only
+   browser wallets can connect.
+
+   `indexerUrl` is real-estate-fund's indexer Worker for the same chain and
+   factory: `real-estate-indexer-mainnet` for mainnet, `real-estate-indexer`
+   for testnet. It feeds the lists and history on `/manage/`. Add the site's
+   domains, including its `*.pages.dev` address, to that indexer's
+   `DASHBOARD_ORIGIN` (real-estate-fund `docs/MAINNET_HANDOFF.md`). Both
+   indexers stay where they are: a site in the Lemon Grove account uses them
+   across accounts by its domain alone. Without `indexerUrl`, `/manage/`
+   works but says those lists are unavailable, and it only finds projects a
+   listing links to or that were created in that browser.
+
+   A mistake in this block fails the build with a message naming the field.
 
    **Trusted owners** are the wallets allowed to own this client's projects:
    a project shows on the site only if its owner is one of them. The client
